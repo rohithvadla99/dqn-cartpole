@@ -7,6 +7,7 @@ import numpy as np
 import random
 from collections import deque
 import matplotlib.pyplot as plt
+import os
 
 # ------------------------------
 # 1. Define DQN Network
@@ -23,22 +24,22 @@ class DQN(nn.Module):
         x = torch.relu(self.fc2(x))
         return self.fc3(x)
 
-
 # ------------------------------
 # Streamlit UI
 # ------------------------------
 st.title("DQN CartPole Demo")
-st.write("A Deep Q-Network agent learning to balance the CartPole environment.")
+st.write("Deep Q-Network agent balancing CartPole-v1")
 
-episodes = st.sidebar.slider("Episodes", 100, 1000, 500, step=100)
+episodes = st.sidebar.slider("Episodes", 100, 1000, 300, step=100)
 epsilon_decay = st.sidebar.slider("Epsilon Decay", 0.90, 0.999, 0.995, step=0.001)
 lr = st.sidebar.number_input("Learning Rate", 0.0001, 0.01, 0.001, step=0.0001, format="%.4f")
 
+MODEL_PATH = "dqn_cartpole.pth"
 
 # ------------------------------
-# 2. Train Agent
+# 2. Train Agent Function
 # ------------------------------
-if st.button("Train Agent"):
+def train_agent(episodes, epsilon_decay, lr):
     env = gym.make("CartPole-v1")
     state_dim = env.observation_space.shape[0]
     action_dim = env.action_space.n
@@ -108,21 +109,28 @@ if st.button("Train Agent"):
     st.pyplot(fig)
 
     # Save model
-    torch.save(model.state_dict(), "dqn_cartpole.pth")
-    st.success("Training complete! Model saved as dqn_cartpole.pth")
-
+    torch.save(model.state_dict(), MODEL_PATH)
+    st.success(f"Training complete! Model saved as {MODEL_PATH}")
+    return model
 
 # ------------------------------
-# 3. Run Trained Agent
+# 3. Run or Train Then Run
 # ------------------------------
 if st.button("Run Trained Agent"):
-    env = gym.make("CartPole-v1")  # no render_mode
-    state_dim = env.observation_space.shape[0]
-    action_dim = env.action_space.n
-    model = DQN(state_dim, action_dim)
-    model.load_state_dict(torch.load("dqn_cartpole.pth"))
-    model.eval()
+    if os.path.exists(MODEL_PATH):
+        # Load model
+        env = gym.make("CartPole-v1")  # no render_mode
+        state_dim = env.observation_space.shape[0]
+        action_dim = env.action_space.n
+        model = DQN(state_dim, action_dim)
+        model.load_state_dict(torch.load(MODEL_PATH))
+        model.eval()
+    else:
+        st.info("No trained model found. Training a default model now...")
+        model = train_agent(episodes=300, epsilon_decay=0.995, lr=0.001)
 
+    # Run agent
+    env = gym.make("CartPole-v1")
     state, info = env.reset()
     done = False
     total_reward = 0
