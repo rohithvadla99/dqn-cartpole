@@ -7,10 +7,9 @@ import numpy as np
 import random
 from collections import deque
 import matplotlib.pyplot as plt
-import os
 
 # ------------------------------
-# 1. Define DQN Network
+# DQN Network
 # ------------------------------
 class DQN(nn.Module):
     def __init__(self, input_dim, output_dim):
@@ -25,19 +24,24 @@ class DQN(nn.Module):
         return self.fc3(x)
 
 # ------------------------------
-# Streamlit UI
+# Initialize session_state
+# ------------------------------
+if 'model' not in st.session_state:
+    st.session_state.model = None
+if 'rewards' not in st.session_state:
+    st.session_state.rewards = []
+
+# ------------------------------
+# UI
 # ------------------------------
 st.title("DQN CartPole Demo")
-st.write("Deep Q-Network agent balancing CartPole-v1")
 
 episodes = st.sidebar.slider("Episodes", 100, 1000, 300, step=100)
 epsilon_decay = st.sidebar.slider("Epsilon Decay", 0.90, 0.999, 0.995, step=0.001)
 lr = st.sidebar.number_input("Learning Rate", 0.0001, 0.01, 0.001, step=0.0001, format="%.4f")
 
-MODEL_PATH = "dqn_cartpole.pth"
-
 # ------------------------------
-# 2. Train Agent Function
+# Train Agent Function
 # ------------------------------
 def train_agent(episodes, epsilon_decay, lr):
     env = gym.make("CartPole-v1")
@@ -97,50 +101,42 @@ def train_agent(episodes, epsilon_decay, lr):
         
         epsilon = max(epsilon * epsilon_decay, epsilon_min)
         rewards_per_episode.append(total_reward)
-        st.write(f"Episode {ep+1}/{episodes} - Reward: {total_reward} - Epsilon: {epsilon:.3f}")
 
+    st.session_state.model = model
+    st.session_state.rewards = rewards_per_episode
+
+# ------------------------------
+# Buttons
+# ------------------------------
+if st.button("Train Agent"):
+    train_agent(episodes, epsilon_decay, lr)
+    st.success("Training complete!")
+
+if st.session_state.rewards:
     # Plot rewards
     fig, ax = plt.subplots()
-    ax.plot(rewards_per_episode, label="Reward per Episode")
+    ax.plot(st.session_state.rewards, label="Reward per Episode")
     ax.set_xlabel("Episode")
     ax.set_ylabel("Total Reward")
-    ax.set_title("DQN Training Progress on CartPole-v1")
+    ax.set_title("DQN Training Progress")
     ax.legend()
     st.pyplot(fig)
 
-    # Save model
-    torch.save(model.state_dict(), MODEL_PATH)
-    st.success(f"Training complete! Model saved as {MODEL_PATH}")
-    return model
-
-# ------------------------------
-# 3. Run or Train Then Run
-# ------------------------------
 if st.button("Run Trained Agent"):
-    if os.path.exists(MODEL_PATH):
-        # Load model
-        env = gym.make("CartPole-v1")  # no render_mode
-        state_dim = env.observation_space.shape[0]
-        action_dim = env.action_space.n
-        model = DQN(state_dim, action_dim)
-        model.load_state_dict(torch.load(MODEL_PATH))
-        model.eval()
+    if st.session_state.model is None:
+        st.warning("No trained model found. Please train first.")
     else:
-        st.info("No trained model found. Training a default model now...")
-        model = train_agent(episodes=300, epsilon_decay=0.995, lr=0.001)
+        env = gym.make("CartPole-v1")
+        state, info = env.reset()
+        done = False
+        total_reward = 0
 
-    # Run agent
-    env = gym.make("CartPole-v1")
-    state, info = env.reset()
-    done = False
-    total_reward = 0
+        while not done:
+            state_tensor = torch.FloatTensor(state).unsqueeze(0)
+            action = torch.argmax(st.session_state.model(state_tensor)).item()
+            state, reward, terminated, truncated, info = env.step(action)
+            done = terminated or truncated
+            total_reward += reward
 
-    while not done:
-        state_tensor = torch.FloatTensor(state).unsqueeze(0)
-        action = torch.argmax(model(state_tensor)).item()
-        state, reward, terminated, truncated, info = env.step(action)
-        done = terminated or truncated
-        total_reward += reward
-
-    env.close()
-    st.success(f"Agent finished episode with reward: {total_reward}")
+        env.close()
+        st.success(f"Agent finished episode with reward: {total_reward}")
