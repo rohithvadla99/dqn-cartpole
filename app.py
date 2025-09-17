@@ -2,10 +2,6 @@
 # app.py
 # ------------------------------
 
-# Set headless backend for Streamlit Cloud
-import matplotlib
-matplotlib.use("Agg")
-
 import streamlit as st
 import gymnasium as gym
 import torch
@@ -15,8 +11,8 @@ import numpy as np
 import random
 from collections import deque
 import matplotlib.pyplot as plt
+import imageio
 from io import BytesIO
-from PIL import Image
 
 # ------------------------------
 # DQN Network
@@ -41,8 +37,11 @@ if 'model' not in st.session_state:
 if 'rewards' not in st.session_state:
     st.session_state.rewards = []
 
-st.title("DQN CartPole Demo - Matplotlib Animation")
+st.title("DQN CartPole Demo - Streamlit Cloud")
 
+# ------------------------------
+# Sidebar Parameters
+# ------------------------------
 episodes = st.sidebar.slider("Episodes", 100, 1000, 300, step=100)
 epsilon_decay = st.sidebar.slider("Epsilon Decay", 0.90, 0.999, 0.995, step=0.001)
 lr = st.sidebar.number_input("Learning Rate", 0.0001, 0.01, 0.001, step=0.0001, format="%.4f")
@@ -119,7 +118,9 @@ if st.button("Train Agent"):
     train_agent(episodes, epsilon_decay, lr)
     st.success("Training complete!")
 
+# ------------------------------
 # Plot rewards
+# ------------------------------
 if st.session_state.rewards:
     fig, ax = plt.subplots()
     ax.plot(st.session_state.rewards, label="Reward per Episode")
@@ -136,15 +137,15 @@ if st.button("Run Trained Agent (Animation)"):
     if st.session_state.model is None:
         st.warning("No trained model found. Please train first.")
     else:
-        env = gym.make("CartPole-v1")
+        env = gym.make("CartPole-v1", render_mode="rgb_array")
         state, info = env.reset()
         done = False
         frames = []
 
-        # Capture frames as (cart x, pole theta)
+        # Collect frames as RGB arrays
         while not done:
-            x, x_dot, theta, theta_dot = state
-            frames.append((x, theta))
+            frame = env.render()
+            frames.append(frame)
             state_tensor = torch.FloatTensor(state).unsqueeze(0)
             action = torch.argmax(st.session_state.model(state_tensor)).item()
             state, reward, terminated, truncated, info = env.step(action)
@@ -153,26 +154,7 @@ if st.button("Run Trained Agent (Animation)"):
         env.close()
         st.success(f"Agent finished episode with reward: {len(frames)}")
 
-        # Build GIF using Pillow without tostring_rgb()
-        images = []
-        for x, theta in frames:
-            fig, ax = plt.subplots(figsize=(6,4))
-            ax.set_xlim(-2.5, 2.5)
-            ax.set_ylim(-0.5, 1.5)
-            cart_width, cart_height = 0.4, 0.2
-            rect = plt.Rectangle((x - cart_width/2, 0), cart_width, cart_height, fc='red')
-            ax.add_patch(rect)
-            pole_x = x + 0.5*np.sin(theta)
-            pole_y = cart_height + 0.5*np.cos(theta)
-            ax.plot([x, pole_x], [cart_height, pole_y], lw=3, color='blue')
-            
-            # Save figure directly to BytesIO
-            buf_img = BytesIO()
-            fig.savefig(buf_img, format='png')
-            buf_img.seek(0)
-            images.append(Image.open(buf_img))
-            plt.close(fig)
-
-        buf_gif = BytesIO()
-        images[0].save(buf_gif, format='GIF', save_all=True, append_images=images[1:], duration=50, loop=0)
-        st.image(buf_gif.getvalue(), caption="Agent Animation")
+        # Create GIF using imageio
+        buf = BytesIO()
+        imageio.mimsave(buf, frames, format='GIF', duration=0.05)
+        st.image(buf.getvalue(), caption="Agent Animation")
