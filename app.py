@@ -1,3 +1,11 @@
+# ------------------------------
+# app.py
+# ------------------------------
+
+# Must set Agg backend BEFORE importing pyplot
+import matplotlib
+matplotlib.use("Agg")
+
 import streamlit as st
 import gymnasium as gym
 import torch
