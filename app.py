@@ -7,7 +7,7 @@ import numpy as np
 import random
 from collections import deque
 import matplotlib.pyplot as plt
-import os
+from matplotlib import animation
 
 # ------------------------------
 # 1. Define DQN Network
@@ -114,13 +114,12 @@ if st.button("Train Agent"):
 
 
 # ------------------------------
-# 3. Run Trained Agent
+# 3. Run Trained Agent with Animation
 # ------------------------------
 if st.button("Run Trained Agent"):
-    env = gym.make("CartPole-v1")  # No rendering
+    env = gym.make("CartPole-v1", render_mode="rgb_array")
     state_dim = env.observation_space.shape[0]
     action_dim = env.action_space.n
-
     model = DQN(state_dim, action_dim)
     model.load_state_dict(torch.load("dqn_cartpole.pth"))
     model.eval()
@@ -128,47 +127,22 @@ if st.button("Run Trained Agent"):
     state, info = env.reset()
     done = False
     total_reward = 0
+    frames = []
 
     while not done:
         state_tensor = torch.FloatTensor(state).unsqueeze(0)
         action = torch.argmax(model(state_tensor)).item()
         state, reward, terminated, truncated, info = env.step(action)
         done = terminated or truncated
+        frames.append(env.render())
         total_reward += reward
 
     env.close()
     st.success(f"Agent finished episode with reward: {total_reward}")
 
-
-# ------------------------------
-# 4. Record Video of Agent
-# ------------------------------
-if st.button("Record Agent Gameplay (MP4)"):
-    video_dir = "videos"
-    os.makedirs(video_dir, exist_ok=True)
-
-    env = gym.make("CartPole-v1", render_mode="rgb_array")
-    env = gym.wrappers.RecordVideo(env, video_dir=video_dir, name_prefix="dqn_cartpole")
-
-    state_dim = env.observation_space.shape[0]
-    action_dim = env.action_space.n
-    model = DQN(state_dim, action_dim)
-    model.load_state_dict(torch.load("dqn_cartpole.pth"))
-    model.eval()
-
-    state, info = env.reset()
-    done = False
-
-    while not done:
-        state_tensor = torch.FloatTensor(state).unsqueeze(0)
-        action = torch.argmax(model(state_tensor)).item()
-        state, reward, terminated, truncated, info = env.step(action)
-        done = terminated or truncated
-
-    env.close()
-
-    latest_video = sorted(os.listdir(video_dir))[-1]
-    video_path = os.path.join(video_dir, latest_video)
-
-    st.video(video_path)
-    st.success("Gameplay recorded and displayed above!")
+    # Display animation in Streamlit
+    fig, ax = plt.subplots()
+    plt.axis('off')
+    ims = [[plt.imshow(frame, animated=True)] for frame in frames]
+    ani = animation.ArtistAnimation(fig, ims, interval=50, blit=True)
+    st.pyplot(fig)
