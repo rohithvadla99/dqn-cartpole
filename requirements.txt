@@ -1,6 +1,6 @@
 streamlit
 torch
-gymnasium
+gymnasium[classic-control]
 numpy
 matplotlib
 imageio
