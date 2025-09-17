@@ -1,5 +1,5 @@
 streamlit
 torch
-gymnasium[all]
+gymnasium
 numpy
 matplotlib
