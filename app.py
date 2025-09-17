@@ -7,6 +7,8 @@ import numpy as np
 import random
 from collections import deque
 import matplotlib.pyplot as plt
+from matplotlib import animation
+from io import BytesIO
 
 # ------------------------------
 # DQN Network
@@ -24,17 +26,14 @@ class DQN(nn.Module):
         return self.fc3(x)
 
 # ------------------------------
-# Initialize session_state
+# Session State
 # ------------------------------
 if 'model' not in st.session_state:
     st.session_state.model = None
 if 'rewards' not in st.session_state:
     st.session_state.rewards = []
 
-# ------------------------------
-# UI
-# ------------------------------
-st.title("DQN CartPole Demo")
+st.title("DQN CartPole Demo - Matplotlib Animation")
 
 episodes = st.sidebar.slider("Episodes", 100, 1000, 300, step=100)
 epsilon_decay = st.sidebar.slider("Epsilon Decay", 0.90, 0.999, 0.995, step=0.001)
@@ -113,7 +112,6 @@ if st.button("Train Agent"):
     st.success("Training complete!")
 
 if st.session_state.rewards:
-    # Plot rewards
     fig, ax = plt.subplots()
     ax.plot(st.session_state.rewards, label="Reward per Episode")
     ax.set_xlabel("Episode")
@@ -122,21 +120,53 @@ if st.session_state.rewards:
     ax.legend()
     st.pyplot(fig)
 
-if st.button("Run Trained Agent"):
+# ------------------------------
+# Run Agent with Matplotlib Animation
+# ------------------------------
+if st.button("Run Trained Agent (Animation)"):
     if st.session_state.model is None:
         st.warning("No trained model found. Please train first.")
     else:
         env = gym.make("CartPole-v1")
         state, info = env.reset()
         done = False
-        total_reward = 0
+        frames = []
 
         while not done:
+            # Capture frame as data
+            x, x_dot, theta, theta_dot = state
+            frames.append((x, theta))  # simple state info for plotting
+
             state_tensor = torch.FloatTensor(state).unsqueeze(0)
             action = torch.argmax(st.session_state.model(state_tensor)).item()
             state, reward, terminated, truncated, info = env.step(action)
             done = terminated or truncated
-            total_reward += reward
 
         env.close()
-        st.success(f"Agent finished episode with reward: {total_reward}")
+        st.success(f"Agent finished episode with reward: {len(frames)}")
+
+        # Matplotlib animation
+        fig, ax = plt.subplots(figsize=(6,4))
+        ax.set_xlim(-2.5, 2.5)
+        ax.set_ylim(-0.5, 1.5)
+        cart_width = 0.4
+        cart_height = 0.2
+        line, = ax.plot([], [], lw=3, color='blue')
+        rect = plt.Rectangle((0,0), cart_width, cart_height, fc='red')
+        ax.add_patch(rect)
+
+        def init():
+            line.set_data([], [])
+            rect.set_xy((-cart_width/2, 0))
+            return line, rect
+
+        def animate(i):
+            x, theta = frames[i]
+            rect.set_xy((x - cart_width/2, 0))
+            line.set_data([x, x + 0.5*np.sin(theta)], [cart_height, cart_height + 0.5*np.cos(theta)])
+            return line, rect
+
+        anim = animation.FuncAnimation(fig, animate, init_func=init, frames=len(frames), interval=50, blit=True)
+        buf = BytesIO()
+        anim.save(buf, format='gif', writer='pillow')
+        st.image(buf.getvalue(), caption="Agent Animation")
