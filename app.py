@@ -2,7 +2,7 @@
 # app.py
 # ------------------------------
 
-# Must set Agg backend BEFORE importing pyplot
+# Set headless backend for Streamlit Cloud
 import matplotlib
 matplotlib.use("Agg")
 
@@ -153,7 +153,7 @@ if st.button("Run Trained Agent (Animation)"):
         env.close()
         st.success(f"Agent finished episode with reward: {len(frames)}")
 
-        # Build GIF using Pillow
+        # Build GIF using Pillow without tostring_rgb()
         images = []
         for x, theta in frames:
             fig, ax = plt.subplots(figsize=(6,4))
@@ -165,12 +165,14 @@ if st.button("Run Trained Agent (Animation)"):
             pole_x = x + 0.5*np.sin(theta)
             pole_y = cart_height + 0.5*np.cos(theta)
             ax.plot([x, pole_x], [cart_height, pole_y], lw=3, color='blue')
-            fig.canvas.draw()
-            img = np.frombuffer(fig.canvas.tostring_rgb(), dtype='uint8')
-            img = img.reshape(fig.canvas.get_width_height()[::-1] + (3,))
-            images.append(Image.fromarray(img))
+            
+            # Save figure directly to BytesIO
+            buf_img = BytesIO()
+            fig.savefig(buf_img, format='png')
+            buf_img.seek(0)
+            images.append(Image.open(buf_img))
             plt.close(fig)
 
-        buf = BytesIO()
-        images[0].save(buf, format='GIF', save_all=True, append_images=images[1:], duration=50, loop=0)
-        st.image(buf.getvalue(), caption="Agent Animation")
+        buf_gif = BytesIO()
+        images[0].save(buf_gif, format='GIF', save_all=True, append_images=images[1:], duration=50, loop=0)
+        st.image(buf_gif.getvalue(), caption="Agent Animation")
