@@ -1,0 +1,5 @@
+streamlit
+torch
+gymnasium[all]
+numpy
+matplotlib
