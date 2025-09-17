@@ -1,6 +1,6 @@
 streamlit
-torch
+torch>=2.0
 gymnasium[classic-control]
-numpy
 matplotlib
+numpy
 imageio
