@@ -7,8 +7,8 @@ import numpy as np
 import random
 from collections import deque
 import matplotlib.pyplot as plt
-from matplotlib import animation
 from io import BytesIO
+from PIL import Image
 
 # ------------------------------
 # DQN Network
@@ -111,6 +111,7 @@ if st.button("Train Agent"):
     train_agent(episodes, epsilon_decay, lr)
     st.success("Training complete!")
 
+# Plot rewards
 if st.session_state.rewards:
     fig, ax = plt.subplots()
     ax.plot(st.session_state.rewards, label="Reward per Episode")
@@ -121,7 +122,7 @@ if st.session_state.rewards:
     st.pyplot(fig)
 
 # ------------------------------
-# Run Agent with Matplotlib Animation
+# Run Agent Animation
 # ------------------------------
 if st.button("Run Trained Agent (Animation)"):
     if st.session_state.model is None:
@@ -132,11 +133,10 @@ if st.button("Run Trained Agent (Animation)"):
         done = False
         frames = []
 
+        # Capture frames as (cart x, pole theta)
         while not done:
-            # Capture frame as data
             x, x_dot, theta, theta_dot = state
-            frames.append((x, theta))  # simple state info for plotting
-
+            frames.append((x, theta))
             state_tensor = torch.FloatTensor(state).unsqueeze(0)
             action = torch.argmax(st.session_state.model(state_tensor)).item()
             state, reward, terminated, truncated, info = env.step(action)
@@ -145,28 +145,24 @@ if st.button("Run Trained Agent (Animation)"):
         env.close()
         st.success(f"Agent finished episode with reward: {len(frames)}")
 
-        # Matplotlib animation
-        fig, ax = plt.subplots(figsize=(6,4))
-        ax.set_xlim(-2.5, 2.5)
-        ax.set_ylim(-0.5, 1.5)
-        cart_width = 0.4
-        cart_height = 0.2
-        line, = ax.plot([], [], lw=3, color='blue')
-        rect = plt.Rectangle((0,0), cart_width, cart_height, fc='red')
-        ax.add_patch(rect)
+        # Build GIF using Pillow
+        images = []
+        for x, theta in frames:
+            fig, ax = plt.subplots(figsize=(6,4))
+            ax.set_xlim(-2.5, 2.5)
+            ax.set_ylim(-0.5, 1.5)
+            cart_width, cart_height = 0.4, 0.2
+            rect = plt.Rectangle((x - cart_width/2, 0), cart_width, cart_height, fc='red')
+            ax.add_patch(rect)
+            pole_x = x + 0.5*np.sin(theta)
+            pole_y = cart_height + 0.5*np.cos(theta)
+            ax.plot([x, pole_x], [cart_height, pole_y], lw=3, color='blue')
+            fig.canvas.draw()
+            img = np.frombuffer(fig.canvas.tostring_rgb(), dtype='uint8')
+            img = img.reshape(fig.canvas.get_width_height()[::-1] + (3,))
+            images.append(Image.fromarray(img))
+            plt.close(fig)
 
-        def init():
-            line.set_data([], [])
-            rect.set_xy((-cart_width/2, 0))
-            return line, rect
-
-        def animate(i):
-            x, theta = frames[i]
-            rect.set_xy((x - cart_width/2, 0))
-            line.set_data([x, x + 0.5*np.sin(theta)], [cart_height, cart_height + 0.5*np.cos(theta)])
-            return line, rect
-
-        anim = animation.FuncAnimation(fig, animate, init_func=init, frames=len(frames), interval=50, blit=True)
         buf = BytesIO()
-        anim.save(buf, format='gif', writer='pillow')
+        images[0].save(buf, format='GIF', save_all=True, append_images=images[1:], duration=50, loop=0)
         st.image(buf.getvalue(), caption="Agent Animation")
